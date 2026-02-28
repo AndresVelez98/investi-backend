@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+requests
+beautifulsoup4
+yfinance
+google-generativeai
+python-dotenv
+sqlalchemy
+pydantic
+pandas
+aiohttp

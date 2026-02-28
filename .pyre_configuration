@@ -1,0 +1,6 @@
+{
+  "source_directories": ["."],
+  "search_path": ["venv/lib/python3.14/site-packages"],
+  "exclude_watch_subdirectories_by_default": true,
+  "ignore_all_errors": false
+}
