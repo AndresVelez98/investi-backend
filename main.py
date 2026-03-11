@@ -36,7 +36,6 @@ app.include_router(auth_router)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "https://investi-frontend-teal.vercel.app"],
-allow_origins=["http://localhost:3000", "https://investi-frontend-teal.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
