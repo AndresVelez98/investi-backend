@@ -29,4 +29,9 @@ def get_db():
 def init_db():
     """Create all tables on startup."""
     from models import User, Profile  # noqa: F401
+    from models_education import (  # noqa: F401
+        EducationModule, Lesson, QuizQuestion,
+        UserLessonProgress, Achievement, UserAchievement,
+    )
     Base.metadata.create_all(bind=engine)
+    

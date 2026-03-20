@@ -1,6 +1,6 @@
 """
 main.py — FastAPI application for Investi AI Backend
-Endpoints: Chat, Market Data, Financial Calculator, Risk Test, User Management
+Endpoints: Chat, Market Data, Financial Calculator, Risk Test, User Management, Education
 """
 from fastapi import FastAPI, HTTPException, Depends  # type: ignore
 from fastapi.middleware.cors import CORSMiddleware  # type: ignore
@@ -23,13 +23,15 @@ from market_data import get_market_data, get_top_assets, _get_yfinance_data  # t
 from ai_advisor import get_unified_analysis, extract_ticker_from_message, evaluate_risk_profile, get_risk_question  # type: ignore
 from calculator import calculate_projection
 from router_auth import router as auth_router  # type: ignore
+from router_education import router as education_router  # type: ignore
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-app = FastAPI(title="Investi AI Backend", version="2.0.0")
+app = FastAPI(title="Investi AI Backend", version="3.0.0")
 app.include_router(auth_router)
+app.include_router(education_router)
 
 # ─── CORS ───────────────────────────────────────────────────────────────────────
 
@@ -47,6 +49,22 @@ app.add_middleware(
 def startup_event():
     logger.info("Initializing database...")
     init_db()
+
+    # Seed education data if tables are empty
+    from models_education import EducationModule
+    db = next(get_db())
+    try:
+        module_count = db.query(EducationModule).count()
+        if module_count == 0:
+            logger.info("Seeding education data...")
+            from seed_lessons import seed_education_data
+            seed_education_data(db)
+            logger.info("Education data seeded successfully!")
+        else:
+            logger.info(f"Education data already exists ({module_count} modules).")
+    finally:
+        db.close()
+
     logger.info("Database ready.")
 
 
@@ -54,7 +72,7 @@ def startup_event():
 
 @app.get("/")
 def read_root():
-    return {"status": "Investi AI Backend is Running", "version": "2.0.0"}
+    return {"status": "Investi AI Backend is Running", "version": "3.0.0"}
 
 
 # ─── Chat Endpoint ────────────────────────────────────────────────────────────────
