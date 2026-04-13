@@ -1,22 +1,21 @@
 """
-ai_advisor.py — Gemini-powered AI financial advisor with improved ticker extraction,
-                Risk Profile Test logic, and contextual financial advice.
+ai_advisor.py — Groq-powered AI financial advisor
 """
 import os
 import re
-import logging
 import json
+import logging
 from typing import Optional
-from google import genai  # type: ignore
+from groq import Groq  # type: ignore
 from dotenv import load_dotenv  # type: ignore
 from market_data import KEYWORD_TO_TICKER  # type: ignore
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-MODEL_NAME = "gemini-2.0-flash-lite"
+MODEL_NAME = "llama-3.3-70b-versatile"
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
 # ─── Risk Test Questions ────────────────────────────────────────────────────────
 
@@ -49,18 +48,12 @@ RISK_QUESTIONS = [
 
 
 def get_risk_question(question_number: int) -> str:
-    """Returns a risk test question by index (0-based)."""
     if 0 <= question_number < len(RISK_QUESTIONS):
-        remaining = len(RISK_QUESTIONS) - question_number
         return RISK_QUESTIONS[question_number] + f"\n\n*Pregunta {question_number + 1} de {len(RISK_QUESTIONS)}*"
     return ""
 
 
 def evaluate_risk_profile(answers: list[str], user_name: Optional[str] = None) -> dict:
-    """
-    Passes user answers to Gemini to classify profile and return advice.
-    Returns: {"profile": str, "explanation": str, "recommendations": str}
-    """
     try:
         qa_text = "\n".join([
             f"P{i+1}: {RISK_QUESTIONS[i].split(chr(10))[0]}\nR{i+1}: {answers[i]}"
@@ -75,7 +68,7 @@ El usuario ha respondido el Test de Perfil de Riesgo:
 {qa_text}
 
 TAREA: Analiza las respuestas y:
-1. Clasifica al usuario como exactamente UNO de: **Conservador**, **Moderado**, o **Agresivo**
+1. Clasifica al usuario como exactamente UNO de: Conservador, Moderado, o Agresivo
 2. Explica brevemente por qué (2-3 oraciones, tono cálido y personalizado)
 3. Da 2 recomendaciones de activos concretas y apropiadas para su perfil
 
@@ -86,15 +79,12 @@ Responde EXACTAMENTE en este formato JSON (sin markdown, solo JSON puro):
   "recommendations": "Tus recomendaciones aquí..."
 }}
 """
-        response = client.models.generate_content(
+        response = client.chat.completions.create(
             model=MODEL_NAME,
-            contents=prompt,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
         )
-        text = response.text.strip()
-
-        # Parse JSON from response
-        import json
-        # Clean up possible markdown code blocks
+        text = response.choices[0].message.content.strip()
         text = re.sub(r"```json|```", "", text).strip()
         data = json.loads(text)
 
@@ -116,11 +106,7 @@ Responde EXACTAMENTE en este formato JSON (sin markdown, solo JSON puro):
 # ─── Unified Chat Analysis ──────────────────────────────────────────────────────
 
 def get_unified_analysis(user_message: str, user_profile: str, market_data: Optional[dict] = None) -> str:
-    """
-    Main chat endpoint: generates a financial advisor response using Gemini.
-    """
     try:
-
         market_context = (
             f"Datos de mercado en tiempo real:\n"
             f"  - Activo: {market_data.get('name', 'N/A')}\n"
@@ -136,8 +122,7 @@ def get_unified_analysis(user_message: str, user_profile: str, market_data: Opti
             "Agresivo": "El usuario tolera alta volatilidad a cambio de mayores retornos. Acciones individuales, cripto, sectores de crecimiento.",
         }.get(user_profile, "Perfil Moderado.")
 
-        prompt = f"""
-Eres Investi, un asesor financiero experto, humano y ético. Hablas siempre en español.
+        prompt = f"""Eres Investi, un asesor financiero experto, humano y ético. Hablas siempre en español.
 
 PERFIL DEL CLIENTE: {user_profile}
 GUÍA DE PERFIL: {profile_guidance}
@@ -153,11 +138,12 @@ INSTRUCCIONES:
 - Usa negrita (**texto**) para destacar datos clave
 - Termina SIEMPRE con: "⚠️ *Este análisis es educativo y no constituye asesoría financiera oficial.*"
 """
-        response = client.models.generate_content(
+        response = client.chat.completions.create(
             model=MODEL_NAME,
-            contents=prompt,
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
         )
-        return response.text
+        return response.choices[0].message.content
 
     except Exception as e:
         logger.error(f"AI analysis error: {e}")
@@ -166,7 +152,6 @@ INSTRUCCIONES:
 
 # ─── Ticker Extraction ──────────────────────────────────────────────────────────
 
-# Common Spanish/English stop words to ignore
 STOP_WORDS = {
     "HOY", "COMO", "ESTA", "ACCION", "RIESGO", "BAJO", "INVERTIR",
     "SECTORES", "PRECIO", "PARA", "QUE", "UNA", "LAS", "LOS", "DEL",
@@ -177,27 +162,17 @@ STOP_WORDS = {
 
 
 def extract_ticker_from_message(message: str) -> str:
-    """
-    Extracts a ticker symbol from a user message.
-    Priority:
-    1. Keyword mapping (e.g. "apple" → "AAPL", "bitcoin" → "BTC-USD")
-    2. Explicit ticker patterns (e.g. $AAPL or all-caps 2–5 letter words)
-    3. Returns "UNKNOWN" if nothing found
-    """
     words = re.sub(r"[¿?¡!.,;:\"'()\n]", " ", message).split()
     lower_msg = message.lower()
 
-    # 1. Check keyword map (longest match wins)
     for keyword, ticker in KEYWORD_TO_TICKER.items():
         if keyword in lower_msg:
             return ticker
 
-    # 2. Check for $TICKER pattern
     dollar_match = re.search(r"\$([A-Z]{1,5}(?:-USD)?)", message.upper())
     if dollar_match:
         return dollar_match.group(1)
 
-    # 3. Check for uppercase ticker words (2–5 letters, not stop words)
     for word in words:
         clean = re.sub(r"[^A-Z]", "", word.upper())
         if 2 <= len(clean) <= 5 and clean not in STOP_WORDS:
@@ -206,6 +181,5 @@ def extract_ticker_from_message(message: str) -> str:
     return "UNKNOWN"
 
 
-# Keep backward-compatible alias
 def extract_ticker_simple(message: str) -> str:
     return extract_ticker_from_message(message)
