@@ -15,7 +15,7 @@ from market_data import KEYWORD_TO_TICKER  # type: ignore
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-MODEL_NAME = "gemini-1.5-flash"
+MODEL_NAME = "gemini-2.5-flash-preview-04-17"
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
@@ -63,7 +63,6 @@ def evaluate_risk_profile(answers: list[str], user_name: Optional[str] = None) -
     Returns: {"profile": str, "explanation": str, "recommendations": str}
     """
     try:
-        model = genai.GenerativeModel(MODEL_NAME)
         qa_text = "\n".join([
             f"P{i+1}: {RISK_QUESTIONS[i].split(chr(10))[0]}\nR{i+1}: {answers[i]}"
             for i in range(min(len(answers), 5))
