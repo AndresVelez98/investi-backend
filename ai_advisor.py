@@ -7,20 +7,16 @@ import re
 import logging
 import json
 from typing import Optional
-from google import genai  # type: ignore
-from google.genai import types  # type: ignore
+import google.generativeai as genai  # type: ignore
 from dotenv import load_dotenv  # type: ignore
 from market_data import KEYWORD_TO_TICKER  # type: ignore
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-MODEL_NAME = "gemini-2.5-flash-preview-04-17"
+MODEL_NAME = "gemini-1.5-flash"
 
-client = genai.Client(
-    api_key=os.getenv("GEMINI_API_KEY"),
-    http_options={"api_version": "v1alpha"},
-)
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
 
 # ─── Risk Test Questions ────────────────────────────────────────────────────────
 
@@ -90,10 +86,8 @@ Responde EXACTAMENTE en este formato JSON (sin markdown, solo JSON puro):
   "recommendations": "Tus recomendaciones aquí..."
 }}
 """
-        response = client.models.generate_content(
-            model=MODEL_NAME,
-            contents=prompt,
-        )
+        model = genai.GenerativeModel(MODEL_NAME)
+        response = model.generate_content(prompt)
         text = response.text.strip()
 
         # Parse JSON from response
@@ -157,10 +151,8 @@ INSTRUCCIONES:
 - Usa negrita (**texto**) para destacar datos clave
 - Termina SIEMPRE con: "⚠️ *Este análisis es educativo y no constituye asesoría financiera oficial.*"
 """
-        response = client.models.generate_content(
-            model=MODEL_NAME,
-            contents=prompt,
-        )
+        model = genai.GenerativeModel(MODEL_NAME)
+        response = model.generate_content(prompt)
         return response.text
 
     except Exception as e:

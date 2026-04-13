@@ -3,9 +3,10 @@ uvicorn[standard]
 requests
 beautifulsoup4
 yfinance
-google-genai
+google-generativeai
 python-dotenv
 sqlalchemy
+psycopg2-binary
 pydantic
 pandas
 aiohttp
