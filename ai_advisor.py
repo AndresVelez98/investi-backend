@@ -17,7 +17,10 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 MODEL_NAME = "gemini-2.5-flash-preview-04-17"
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+client = genai.Client(
+    api_key=os.getenv("GEMINI_API_KEY"),
+    http_options={"api_version": "v1alpha"},
+)
 
 # ─── Risk Test Questions ────────────────────────────────────────────────────────
 
