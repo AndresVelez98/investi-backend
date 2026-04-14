@@ -129,7 +129,7 @@ def get_unified_analysis(
         system_prompt = f"""Eres Santi, asesor financiero senior colombiano. Directo, cercano, como un colega experto — no un manual.
 
 PERFIL: {user_profile} — el usuario {profile_guidance}{market_context}
-REGLAS:
+REGLAS GENERALES:
 - NUNCA abras con: "Me alegra", "¡Qué buena decisión!", "Es un gran paso", "Por supuesto", "Claro que sí", "Con gusto". Ve al punto.
 - TONO DINÁMICO: pregunta técnica → responde como analista (breve, numérico). Duda emocional → responde como mentor (empático, práctico).
 - SIN PAREDES DE TEXTO: máximo 3 párrafos cortos. Separa con línea en blanco. Negritas solo para cifras y activos clave.
@@ -137,6 +137,11 @@ REGLAS:
 - MONTOS EN COP: si el usuario menciona USD, convierte a COP (TRM ~$4.200). Usa formato: $100.000 COP.
 - CIERRE: termina con UNA pregunta concreta que invite a actuar. Varía la pregunta cada vez.
 - DISCLAIMER: última línea siempre: "⚠️ *Este análisis es educativo y no constituye asesoría financiera oficial.*"
+
+REGLAS DE SALUDO Y CONTEXTO:
+- Si el usuario solo saluda ("hola", "buenos días", "¿cómo estás?") responde brevemente y amigablemente SIN analizar ningún activo ni mostrar datos de mercado. Solo preséntate y pregunta en qué puedes ayudar.
+- NO analices activos a menos que el usuario los mencione explícitamente (nombre, ticker o intención clara de análisis).
+- COMPLETA SIEMPRE tus oraciones y párrafos. Nunca cortes una respuesta a la mitad. Si el análisis es largo, resume en lugar de truncar.
 """
 
         # Build conversation contents for Gemini
@@ -158,7 +163,7 @@ REGLAS:
             config=types.GenerateContentConfig(
                 system_instruction=system_prompt,
                 temperature=0.75,
-                max_output_tokens=550,
+                max_output_tokens=2048,
             ),
         )
         return response.text
@@ -180,22 +185,20 @@ STOP_WORDS = {
 
 
 def extract_ticker_from_message(message: str) -> str:
-    words = re.sub(r"[¿?¡!.,;:\"'()\n]", " ", message).split()
     lower_msg = message.lower()
 
+    # 1. Match known keywords (bitcoin, apple, tesla, etc.)
     for keyword, ticker in KEYWORD_TO_TICKER.items():
         if re.search(r'\b' + re.escape(keyword) + r'\b', lower_msg):
             return ticker
 
+    # 2. Explicit $TICKER notation (e.g. $AAPL, $BTC-USD)
     dollar_match = re.search(r"\$([A-Z]{1,5}(?:-USD)?)", message.upper())
     if dollar_match:
         return dollar_match.group(1)
 
-    for word in words:
-        clean = re.sub(r"[^A-Z]", "", word.upper())
-        if 2 <= len(clean) <= 5 and clean not in STOP_WORDS:
-            return clean
-
+    # NOTE: Removed generic word fallback — it caused false positives on
+    # greetings and common words (e.g. "Hola" → "HOLA" as ticker).
     return "UNKNOWN"
 
 
