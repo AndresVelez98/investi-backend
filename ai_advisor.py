@@ -1,21 +1,22 @@
 """
-ai_advisor.py — Groq-powered AI financial advisor
+ai_advisor.py — Google Gemini 1.5 Flash powered AI financial advisor
 """
 import os
 import re
 import json
 import logging
 from typing import Optional
-from groq import Groq  # type: ignore
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv  # type: ignore
 from market_data import KEYWORD_TO_TICKER  # type: ignore
 
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-MODEL_NAME = "llama-3.3-70b-versatile"
+MODEL_NAME = "gemini-1.5-flash"
 
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 # ─── Risk Test Questions ────────────────────────────────────────────────────────
 
@@ -79,12 +80,12 @@ Responde EXACTAMENTE en este formato JSON (sin markdown, solo JSON puro):
   "recommendations": "Tus recomendaciones aquí..."
 }}
 """
-        response = client.chat.completions.create(
+        response = client.models.generate_content(
             model=MODEL_NAME,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
+            contents=prompt,
+            config=types.GenerateContentConfig(temperature=0.7),
         )
-        text = response.choices[0].message.content.strip()
+        text = response.text.strip()
         text = re.sub(r"```json|```", "", text).strip()
         data = json.loads(text)
 
@@ -138,19 +139,29 @@ REGLAS:
 - DISCLAIMER: última línea siempre: "⚠️ *Este análisis es educativo y no constituye asesoría financiera oficial.*"
 """
 
-        messages = [{"role": "system", "content": system_prompt}]
+        # Build conversation contents for Gemini
+        # Gemini uses "user" and "model" roles (not "assistant")
+        contents = []
         if history:
             for msg in history[-8:]:
-                messages.append({"role": msg["role"], "content": msg["content"]})
-        messages.append({"role": "user", "content": user_message})
-
-        response = client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=messages,
-            temperature=0.75,
-            max_tokens=550,
+                role = "model" if msg["role"] == "assistant" else "user"
+                contents.append(
+                    types.Content(role=role, parts=[types.Part(text=msg["content"])])
+                )
+        contents.append(
+            types.Content(role="user", parts=[types.Part(text=user_message)])
         )
-        return response.choices[0].message.content
+
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                temperature=0.75,
+                max_output_tokens=550,
+            ),
+        )
+        return response.text
 
     except Exception as e:
         logger.error(f"AI analysis error: {e}")

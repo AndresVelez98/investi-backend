@@ -3,7 +3,7 @@ uvicorn[standard]
 requests
 beautifulsoup4
 yfinance
-groq
+google-genai
 python-dotenv
 sqlalchemy
 psycopg2-binary
