@@ -169,7 +169,7 @@ def extract_ticker_from_message(message: str) -> str:
     lower_msg = message.lower()
 
     for keyword, ticker in KEYWORD_TO_TICKER.items():
-        if keyword in lower_msg:
+        if re.search(r'\b' + re.escape(keyword) + r'\b', lower_msg):
             return ticker
 
     dollar_match = re.search(r"\$([A-Z]{1,5}(?:-USD)?)", message.upper())
