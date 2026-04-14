@@ -14,7 +14,7 @@ from market_data import KEYWORD_TO_TICKER  # type: ignore
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-MODEL_NAME = "gemini-1.5-flash"
+MODEL_NAME = "gemini-3-flash-preview"
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
