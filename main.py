@@ -136,6 +136,22 @@ async def chat_endpoint(request: ChatRequest):
     }
 
 
+# ─── TRM Endpoint ────────────────────────────────────────────────────────────────
+
+@app.get("/api/trm")
+def get_trm():
+    """Returns current USD/COP exchange rate (TRM) via yfinance."""
+    try:
+        import yfinance as yf
+        ticker = yf.Ticker("USDCOP=X")
+        rate = ticker.fast_info.last_price
+        if rate and rate > 1000:
+            return {"trm": round(rate, 0), "source": "yfinance"}
+    except Exception as e:
+        logger.warning(f"TRM fetch failed: {e}")
+    return {"trm": 3588, "source": "fallback"}
+
+
 # ─── Market Data Endpoints ────────────────────────────────────────────────────────
 
 @app.get("/api/market/top")
