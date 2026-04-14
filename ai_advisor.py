@@ -105,47 +105,50 @@ Responde EXACTAMENTE en este formato JSON (sin markdown, solo JSON puro):
 
 # ─── Unified Chat Analysis ──────────────────────────────────────────────────────
 
-def get_unified_analysis(user_message: str, user_profile: str, market_data: Optional[dict] = None) -> str:
+def get_unified_analysis(
+    user_message: str,
+    user_profile: str,
+    market_data: Optional[dict] = None,
+    history: Optional[list] = None,
+) -> str:
     try:
         market_context = (
-            f"Datos de mercado en tiempo real:\n"
-            f"  - Activo: {market_data.get('name', 'N/A')}\n"
-            f"  - Precio actual: ${market_data.get('price', 'N/A')}\n"
-            f"  - Cambio hoy: {market_data.get('change', 'N/A')} ({market_data.get('change_percent', 'N/A')})\n"
+            f"\n[DATOS EN TIEMPO REAL] {market_data.get('name')} ({market_data.get('ticker','')}): "
+            f"${market_data.get('price')} USD · Cambio: {market_data.get('change')} ({market_data.get('change_percent')})\n"
             if market_data and "error" not in market_data
-            else "No hay datos de mercado específicos para este mensaje."
+            else ""
         )
 
         profile_guidance = {
-            "Conservador": "El usuario prefiere seguridad. Prioriza productos de bajo riesgo (bonos, ETFs diversificados, depósitos).",
-            "Moderado": "El usuario busca equilibrio riesgo/retorno. Acciones blue-chip, ETFs mixtos son adecuados.",
-            "Agresivo": "El usuario tolera alta volatilidad a cambio de mayores retornos. Acciones individuales, cripto, sectores de crecimiento.",
-        }.get(user_profile, "Perfil Moderado.")
+            "Conservador": "prefiere seguridad y capital protegido. CDTs, bonos, ETFs diversificados.",
+            "Moderado": "busca balance riesgo/retorno. Acciones blue-chip, ETFs mixtos, fondos de inversión.",
+            "Agresivo": "acepta alta volatilidad por mayor retorno. Acciones, cripto, sectores emergentes.",
+        }.get(user_profile, "busca balance riesgo/retorno.")
 
-        prompt = f"""Eres Santi, un asesor financiero senior colombiano, cercano y experto. Tu misión es guiar al usuario como un mentor de confianza, no solo dar datos fríos. Hablas siempre en español latino, con un tono cálido y natural, como si estuvieras tomando un café con el usuario.
+        system_prompt = f"""Eres Santi, asesor financiero senior colombiano. Directo, cercano, como un colega experto — no un manual.
 
-PERFIL DEL CLIENTE: {user_profile}
-GUÍA DE PERFIL: {profile_guidance}
-
-MENSAJE DEL USUARIO: "{user_message}"
-
-{market_context}
-
-REGLAS DE PERSONALIDAD (síguelas siempre):
-1. EMPATÍA REAL: Si el usuario da un paso hacia invertir, aunque sea pequeño, reconócelo genuinamente. No de forma exagerada, sino natural.
-2. CONTEXTO COLOMBIA: El usuario está en Colombia. De forma proactiva y natural menciona opciones locales relevantes como Trii, Tyba, Adagio o fondos de pensiones voluntarias cuando aplique. No esperes a que te pregunten.
-3. SIN LISTAS ABURRIDAS: No uses listas de 5 puntos con asteriscos. Habla en párrafos fluidos. Usa frases como "Mira, lo que yo haría en tu lugar es...", "Esto es interesante porque...", "Te cuento algo que poca gente sabe...".
-4. CONSEJOS CONCRETOS: Responde ESPECÍFICAMENTE lo que pregunta. Si menciona $100.000 COP, habla de esa cifra exacta y qué puede hacer con ella hoy.
-5. HONESTIDAD DE AMIGO: Si un activo es volátil o riesgoso para su perfil, adviértele como un amigo: "Ojo, esto se mueve mucho, asegúrate de que sea solo una parte pequeña de tu plan."
-6. PREGUNTA FINAL: Termina SIEMPRE con una pregunta corta que invite a seguir la conversación y a tomar acción. Ejemplos: "¿Te gustaría que simulemos cuánto crecerían esos $100.000 en un año?", "¿Quieres que exploremos cómo abrir una cuenta en Trii paso a paso?"
-7. LONGITUD: Máximo 3-4 párrafos. Conciso pero sustancioso.
-
-Termina siempre con: "⚠️ *Este análisis es educativo y no constituye asesoría financiera oficial.*"
+PERFIL: {user_profile} — el usuario {profile_guidance}{market_context}
+REGLAS:
+- NUNCA abras con: "Me alegra", "¡Qué buena decisión!", "Es un gran paso", "Por supuesto", "Claro que sí", "Con gusto". Ve al punto.
+- TONO DINÁMICO: pregunta técnica → responde como analista (breve, numérico). Duda emocional → responde como mentor (empático, práctico).
+- SIN PAREDES DE TEXTO: máximo 3 párrafos cortos. Separa con línea en blanco. Negritas solo para cifras y activos clave.
+- COLOMBIA SIEMPRE: menciona Trii, Tyba o XTB Colombia cuando sea útil, pero no repitas lo que ya explicaste antes.
+- MONTOS EN COP: si el usuario menciona USD, convierte a COP (TRM ~$4.200). Usa formato: $100.000 COP.
+- CIERRE: termina con UNA pregunta concreta que invite a actuar. Varía la pregunta cada vez.
+- DISCLAIMER: última línea siempre: "⚠️ *Este análisis es educativo y no constituye asesoría financiera oficial.*"
 """
+
+        messages = [{"role": "system", "content": system_prompt}]
+        if history:
+            for msg in history[-8:]:
+                messages.append({"role": msg["role"], "content": msg["content"]})
+        messages.append({"role": "user", "content": user_message})
+
         response = client.chat.completions.create(
             model=MODEL_NAME,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
+            messages=messages,
+            temperature=0.75,
+            max_tokens=550,
         )
         return response.choices[0].message.content
 

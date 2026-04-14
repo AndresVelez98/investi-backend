@@ -19,6 +19,31 @@ from schemas import (  # type: ignore
     CalculatorRequest, CalculatorResponse,
     RiskTestEvaluateRequest, RiskTestEvaluateResponse,
 )
+import re as _re
+
+def _detect_amount(message: str) -> Optional[dict]:
+    """Detect investment amounts in user messages for the calculator widget."""
+    # Patterns: $100.000 COP, $25 USD, 200000 pesos, 100k
+    patterns = [
+        (r'\$\s*(\d{1,3}(?:[.\s]\d{3})*|\d+)\s*(?:USD|usd|dólares?)', "usd"),
+        (r'(\d{1,3}(?:[.\s]\d{3})*|\d+)\s*(?:pesos?|COP|cop)', "cop"),
+        (r'\$\s*(\d{1,3}(?:[.\s]\d{3})*|\d+)', "ambiguous"),
+    ]
+    for pattern, kind in patterns:
+        m = _re.search(pattern, message, _re.IGNORECASE)
+        if m:
+            raw = m.group(1).replace(".", "").replace(" ", "")
+            try:
+                amount = float(raw)
+                if kind == "usd" or (kind == "ambiguous" and amount < 5000):
+                    return {"amount_cop": int(amount * 4200), "amount_usd": round(amount, 2)}
+                else:
+                    if amount < 500:
+                        amount *= 1000  # treat as thousands
+                    return {"amount_cop": int(amount), "amount_usd": round(amount / 4200, 2)}
+            except ValueError:
+                pass
+    return None
 from market_data import get_market_data, get_top_assets, _get_yfinance_data, get_sparkline_data  # type: ignore
 from ai_advisor import get_unified_analysis, extract_ticker_from_message, evaluate_risk_profile, get_risk_question  # type: ignore
 from calculator import calculate_projection
@@ -92,16 +117,22 @@ async def chat_endpoint(request: ChatRequest):
     if market_data and "error" in market_data:
         market_data = None
 
+    history = [{"role": m.role, "content": m.content} for m in request.history]
+
     ai_reply = get_unified_analysis(
         user_message=request.message,
         user_profile=request.profile,
-        market_data=market_data
+        market_data=market_data,
+        history=history,
     )
+
+    calculator_data = _detect_amount(request.message)
 
     return {
         "reply": ai_reply,
         "market_data": market_data,
         "detected_ticker": ticker,
+        "calculator_data": calculator_data,
     }
 
 

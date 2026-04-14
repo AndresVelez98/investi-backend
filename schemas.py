@@ -44,9 +44,15 @@ class ProfileResponse(BaseModel):
 
 # ─── Chat Schemas ───────────────────────────────────────────────────────────────
 
+class ChatHistoryMessage(BaseModel):
+    role: str   # "user" | "assistant"
+    content: str
+
+
 class ChatRequest(BaseModel):
     message: str
     profile: str = "Moderado"
+    history: List[ChatHistoryMessage] = []
 
 
 # ─── Calculator Schemas ─────────────────────────────────────────────────────────
