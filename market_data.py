@@ -118,6 +118,20 @@ def get_top_assets() -> list:
     return results
 
 
+def get_sparkline_data(ticker_symbol: str) -> dict:
+    """Returns last 7 days of close prices for sparkline rendering."""
+    try:
+        ticker = yf.Ticker(ticker_symbol)
+        hist = ticker.history(period="7d")
+        if hist.empty:
+            return {"ticker": ticker_symbol, "prices": []}
+        prices = [round(float(p), 4) for p in hist["Close"].dropna().tolist()]
+        return {"ticker": ticker_symbol, "prices": prices}
+    except Exception as e:
+        logger.error(f"Sparkline error for {ticker_symbol}: {e}")
+        return {"ticker": ticker_symbol, "prices": []}
+
+
 def _get_yfinance_data(ticker_symbol: str) -> dict:
     """
     Fetch data for a single ticker using yfinance.

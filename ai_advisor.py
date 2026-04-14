@@ -62,15 +62,15 @@ def evaluate_risk_profile(answers: list[str], user_name: Optional[str] = None) -
         name_part = f"El usuario se llama {user_name}." if user_name else ""
 
         prompt = f"""
-Actúa como un asesor financiero experto. {name_part}
-El usuario ha respondido el Test de Perfil de Riesgo:
+Eres Santi, un asesor financiero cercano y experto. {name_part}
+El usuario acaba de terminar el Test de Perfil de Riesgo:
 
 {qa_text}
 
-TAREA: Analiza las respuestas y:
+TAREA:
 1. Clasifica al usuario como exactamente UNO de: Conservador, Moderado, o Agresivo
-2. Explica brevemente por qué (2-3 oraciones, tono cálido y personalizado)
-3. Da 2 recomendaciones de activos concretas y apropiadas para su perfil
+2. Explica el resultado de forma cálida y personalizada (2-3 oraciones), como si le hablaras de frente
+3. Da 2 recomendaciones de activos concretas para su perfil, considerando que está en Colombia
 
 Responde EXACTAMENTE en este formato JSON (sin markdown, solo JSON puro):
 {{

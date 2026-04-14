@@ -19,7 +19,7 @@ from schemas import (  # type: ignore
     CalculatorRequest, CalculatorResponse,
     RiskTestEvaluateRequest, RiskTestEvaluateResponse,
 )
-from market_data import get_market_data, get_top_assets, _get_yfinance_data  # type: ignore
+from market_data import get_market_data, get_top_assets, _get_yfinance_data, get_sparkline_data  # type: ignore
 from ai_advisor import get_unified_analysis, extract_ticker_from_message, evaluate_risk_profile, get_risk_question  # type: ignore
 from calculator import calculate_projection
 from router_auth import router as auth_router  # type: ignore
@@ -35,9 +35,17 @@ app.include_router(education_router)
 
 # ─── CORS ───────────────────────────────────────────────────────────────────────
 
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "https://investi-frontend-teal.vercel.app",
+]
+frontend_url = os.getenv("FRONTEND_URL")
+if frontend_url:
+    ALLOWED_ORIGINS.append(frontend_url)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://investi-frontend-teal.vercel.app"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -104,6 +112,12 @@ def market_top_assets():
     """Returns current prices for curated list of top assets (dashboard use)."""
     assets = get_top_assets()
     return {"assets": assets}
+
+
+@app.get("/api/market/{ticker}/sparkline")
+def market_sparkline(ticker: str):
+    """Returns last 7 days of close prices for sparkline rendering."""
+    return get_sparkline_data(ticker.upper())
 
 
 @app.get("/api/market/{ticker}")
