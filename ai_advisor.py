@@ -15,7 +15,6 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 MODEL_NAME = "gemini-2.0-flash"
-MODEL_FALLBACK = "gemini-1.5-flash"
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
@@ -82,19 +81,9 @@ Responde EXACTAMENTE en este formato JSON (sin markdown, solo JSON puro):
 }}
 """
         config = types.GenerateContentConfig(temperature=0.7)
-        try:
-            response = client.models.generate_content(
-                model=MODEL_NAME, contents=prompt, config=config
-            )
-        except Exception as primary_err:
-            err_str = str(primary_err).lower()
-            if "resource_exhausted" in err_str or "quota" in err_str or "429" in err_str:
-                logger.warning(f"Primary model quota exceeded on risk eval, trying fallback")
-                response = client.models.generate_content(
-                    model=MODEL_FALLBACK, contents=prompt, config=config
-                )
-            else:
-                raise
+        response = client.models.generate_content(
+            model=MODEL_NAME, contents=prompt, config=config
+        )
 
         text = response.text.strip()
         text = re.sub(r"```json|```", "", text).strip()
@@ -147,7 +136,7 @@ REGLAS GENERALES:
 - COLOMBIA SIEMPRE: menciona Trii, Tyba o XTB Colombia cuando sea útil, pero no repitas lo que ya explicaste antes.
 - MONTOS EN COP: si el usuario menciona USD, convierte a COP (TRM ~$3.588). Usa formato: $100.000 COP.
 - CIERRE: termina con UNA pregunta concreta que invite a actuar. Varía la pregunta cada vez.
-- DISCLAIMER: última línea siempre: "⚠️ *Este análisis es educativo y no constituye asesoría financiera oficial.*"
+- DISCLAIMER: NO incluyas el aviso legal ⚠️ al final de tus respuestas. Ese aviso ya está visible permanentemente en la interfaz del usuario.
 
 REGLAS DE SALUDO Y CONTEXTO:
 - Si el usuario solo saluda ("hola", "buenos días", "¿cómo estás?") responde brevemente y amigablemente SIN analizar ningún activo ni mostrar datos de mercado. Solo preséntate y pregunta en qué puedes ayudar.
@@ -168,27 +157,15 @@ REGLAS DE SALUDO Y CONTEXTO:
             types.Content(role="user", parts=[types.Part(text=user_message)])
         )
 
-        config = types.GenerateContentConfig(
-            system_instruction=system_prompt,
-            temperature=0.75,
-            max_output_tokens=2048,
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=contents,
+            config=types.GenerateContentConfig(
+                system_instruction=system_prompt,
+                temperature=0.75,
+                max_output_tokens=2048,
+            ),
         )
-
-        # Try primary model, fall back on quota errors
-        try:
-            response = client.models.generate_content(
-                model=MODEL_NAME, contents=contents, config=config
-            )
-        except Exception as primary_err:
-            err_str = str(primary_err).lower()
-            if "resource_exhausted" in err_str or "quota" in err_str or "429" in err_str:
-                logger.warning(f"Primary model quota exceeded, trying fallback: {primary_err}")
-                response = client.models.generate_content(
-                    model=MODEL_FALLBACK, contents=contents, config=config
-                )
-            else:
-                raise
-
         return response.text
 
     except Exception as e:
@@ -196,9 +173,8 @@ REGLAS DE SALUDO Y CONTEXTO:
         logger.error(f"AI analysis error: {e}")
         if "resource_exhausted" in err_str or "quota" in err_str or "429" in err_str:
             return (
-                "Estoy recibiendo muchas consultas en este momento y mi cuota está al límite. "
-                "Por favor intenta de nuevo en unos minutos. ⏳\n\n"
-                "⚠️ *Este análisis es educativo y no constituye asesoría financiera oficial.*"
+                "Santi está procesando muchas consultas en este momento. ⏳ "
+                "Por favor, intenta de nuevo en un minuto."
             )
         return "Lo siento, tuve un problema procesando tu consulta. Por favor intenta de nuevo."
 
