@@ -1,5 +1,5 @@
 """
-ai_advisor.py — Google Gemini 1.5 Flash powered AI financial advisor
+ai_advisor.py — Google Gemini 2.0 Flash powered AI financial advisor
 """
 import os
 import re
@@ -7,7 +7,7 @@ import json
 import logging
 from typing import Optional
 from google import genai
-from google.genai import types
+from google.genai import types, errors as genai_errors
 from dotenv import load_dotenv  # type: ignore
 from market_data import KEYWORD_TO_TICKER  # type: ignore
 
@@ -112,21 +112,22 @@ def get_unified_analysis(
     market_data: Optional[dict] = None,
     history: Optional[list] = None,
 ) -> str:
-    try:
-        market_context = (
-            f"\n[DATOS EN TIEMPO REAL] {market_data.get('name')} ({market_data.get('ticker','')}): "
-            f"${market_data.get('price')} USD · Cambio: {market_data.get('change')} ({market_data.get('change_percent')})\n"
-            if market_data and "error" not in market_data
-            else ""
-        )
 
-        profile_guidance = {
-            "Conservador": "prefiere seguridad y capital protegido. CDTs, bonos, ETFs diversificados.",
-            "Moderado": "busca balance riesgo/retorno. Acciones blue-chip, ETFs mixtos, fondos de inversión.",
-            "Agresivo": "acepta alta volatilidad por mayor retorno. Acciones, cripto, sectores emergentes.",
-        }.get(user_profile, "busca balance riesgo/retorno.")
+    # ── Build system prompt ────────────────────────────────────────────────────
+    market_context = (
+        f"\n[DATOS EN TIEMPO REAL] {market_data.get('name')} ({market_data.get('ticker', '')}): "
+        f"${market_data.get('price')} USD · Cambio: {market_data.get('change')} ({market_data.get('change_percent')})\n"
+        if market_data and "error" not in market_data
+        else ""
+    )
 
-        system_prompt = f"""Eres Santi, asesor financiero senior colombiano. Directo, cercano, como un colega experto — no un manual.
+    profile_guidance = {
+        "Conservador": "prefiere seguridad y capital protegido. CDTs, bonos, ETFs diversificados.",
+        "Moderado": "busca balance riesgo/retorno. Acciones blue-chip, ETFs mixtos, fondos de inversión.",
+        "Agresivo": "acepta alta volatilidad por mayor retorno. Acciones, cripto, sectores emergentes.",
+    }.get(user_profile, "busca balance riesgo/retorno.")
+
+    system_prompt = f"""Eres Santi, asesor financiero senior colombiano. Directo, cercano, como un colega experto — no un manual.
 
 PERFIL: {user_profile} — el usuario {profile_guidance}{market_context}
 REGLAS GENERALES:
@@ -136,27 +137,42 @@ REGLAS GENERALES:
 - COLOMBIA SIEMPRE: menciona Trii, Tyba o XTB Colombia cuando sea útil, pero no repitas lo que ya explicaste antes.
 - MONTOS EN COP: si el usuario menciona USD, convierte a COP (TRM ~$3.588). Usa formato: $100.000 COP.
 - CIERRE: termina con UNA pregunta concreta que invite a actuar. Varía la pregunta cada vez.
-- DISCLAIMER: NO incluyas el aviso legal ⚠️ al final de tus respuestas. Ese aviso ya está visible permanentemente en la interfaz del usuario.
+- DISCLAIMER: NO incluyas el aviso legal ⚠️ al final de tus respuestas. Ya está visible en la interfaz.
 
 REGLAS DE SALUDO Y CONTEXTO:
-- Si el usuario solo saluda ("hola", "buenos días", "¿cómo estás?") responde brevemente y amigablemente SIN analizar ningún activo ni mostrar datos de mercado. Solo preséntate y pregunta en qué puedes ayudar.
-- NO analices activos a menos que el usuario los mencione explícitamente (nombre, ticker o intención clara de análisis).
-- COMPLETA SIEMPRE tus oraciones y párrafos. Nunca cortes una respuesta a la mitad. Si el análisis es largo, resume en lugar de truncar.
+- Si el usuario solo saluda ("hola", "buenos días", "¿cómo estás?") responde brevemente SIN analizar activos.
+- NO analices activos a menos que el usuario los mencione explícitamente.
+- COMPLETA SIEMPRE tus oraciones. Nunca cortes una respuesta a la mitad.
 """
 
-        # Build conversation contents for Gemini
-        # Gemini uses "user" and "model" roles (not "assistant")
-        contents = []
-        if history:
-            for msg in history[-8:]:
-                role = "model" if msg["role"] == "assistant" else "user"
-                contents.append(
-                    types.Content(role=role, parts=[types.Part(text=msg["content"])])
-                )
-        contents.append(
-            types.Content(role="user", parts=[types.Part(text=user_message)])
-        )
+    # ── Sanitize history ───────────────────────────────────────────────────────
+    # Gemini requires conversation to:
+    #   1. Start with role="user"  (never "model")
+    #   2. Strictly alternate user / model
+    #   3. Have no empty content strings
+    raw = (history or [])[-8:]
 
+    # Drop leading assistant messages — the initial Santi greeting causes a 400
+    while raw and raw[0].get("role") in ("assistant", "model"):
+        raw = raw[1:]
+
+    contents: list[types.Content] = []
+    expected = "user"
+    for msg in raw:
+        role = "model" if msg.get("role") in ("assistant", "model") else "user"
+        text = str(msg.get("content", "")).strip()
+        if not text:
+            continue  # skip empty messages
+        if role != expected:
+            continue  # skip out-of-order messages to preserve alternation
+        contents.append(types.Content(role=role, parts=[types.Part(text=text)]))
+        expected = "model" if expected == "user" else "user"
+
+    # Current user turn — always append last
+    contents.append(types.Content(role="user", parts=[types.Part(text=user_message)]))
+
+    # ── Call Gemini — only this block is wrapped ───────────────────────────────
+    try:
         response = client.models.generate_content(
             model=MODEL_NAME,
             contents=contents,
@@ -168,15 +184,25 @@ REGLAS DE SALUDO Y CONTEXTO:
         )
         return response.text
 
-    except Exception as e:
-        err_str = str(e).lower()
-        logger.error(f"AI analysis error: {e}")
-        if "resource_exhausted" in err_str or "quota" in err_str or "429" in err_str:
+    except genai_errors.ClientError as e:
+        # Log the real error so it appears in the server console
+        logger.error(f"Gemini ClientError {e.code} [{e.status}]: {e.message}")
+        if e.code == 429:
             return (
                 "Santi está procesando muchas consultas en este momento. ⏳ "
                 "Por favor, intenta de nuevo en un minuto."
             )
-        return "Lo siento, tuve un problema procesando tu consulta. Por favor intenta de nuevo."
+        # Any other 4xx (bad model name, invalid request, auth error…)
+        return f"Error del servicio de IA (código {e.code}: {e.status}). Por favor intenta de nuevo."
+
+    except genai_errors.ServerError as e:
+        logger.error(f"Gemini ServerError {e.code}: {e.message}")
+        return "El servicio de IA está temporalmente no disponible. Intenta en unos segundos."
+
+    except Exception as e:
+        # Catch-all — prints the real exception type so you can diagnose it
+        logger.error(f"Unexpected error in get_unified_analysis: {type(e).__name__}: {e}")
+        return "Lo siento, ocurrió un error inesperado. Por favor intenta de nuevo."
 
 
 # ─── Ticker Extraction ──────────────────────────────────────────────────────────
