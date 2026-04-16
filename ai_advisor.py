@@ -14,7 +14,8 @@ from market_data import KEYWORD_TO_TICKER  # type: ignore
 load_dotenv()
 
 logger = logging.getLogger(__name__)
-MODEL_NAME = "gemini-3-flash-preview"
+MODEL_NAME = "gemini-2.0-flash"
+MODEL_FALLBACK = "gemini-1.5-flash"
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
@@ -80,11 +81,21 @@ Responde EXACTAMENTE en este formato JSON (sin markdown, solo JSON puro):
   "recommendations": "Tus recomendaciones aquí..."
 }}
 """
-        response = client.models.generate_content(
-            model=MODEL_NAME,
-            contents=prompt,
-            config=types.GenerateContentConfig(temperature=0.7),
-        )
+        config = types.GenerateContentConfig(temperature=0.7)
+        try:
+            response = client.models.generate_content(
+                model=MODEL_NAME, contents=prompt, config=config
+            )
+        except Exception as primary_err:
+            err_str = str(primary_err).lower()
+            if "resource_exhausted" in err_str or "quota" in err_str or "429" in err_str:
+                logger.warning(f"Primary model quota exceeded on risk eval, trying fallback")
+                response = client.models.generate_content(
+                    model=MODEL_FALLBACK, contents=prompt, config=config
+                )
+            else:
+                raise
+
         text = response.text.strip()
         text = re.sub(r"```json|```", "", text).strip()
         data = json.loads(text)
@@ -157,20 +168,39 @@ REGLAS DE SALUDO Y CONTEXTO:
             types.Content(role="user", parts=[types.Part(text=user_message)])
         )
 
-        response = client.models.generate_content(
-            model=MODEL_NAME,
-            contents=contents,
-            config=types.GenerateContentConfig(
-                system_instruction=system_prompt,
-                temperature=0.75,
-                max_output_tokens=2048,
-            ),
+        config = types.GenerateContentConfig(
+            system_instruction=system_prompt,
+            temperature=0.75,
+            max_output_tokens=2048,
         )
+
+        # Try primary model, fall back on quota errors
+        try:
+            response = client.models.generate_content(
+                model=MODEL_NAME, contents=contents, config=config
+            )
+        except Exception as primary_err:
+            err_str = str(primary_err).lower()
+            if "resource_exhausted" in err_str or "quota" in err_str or "429" in err_str:
+                logger.warning(f"Primary model quota exceeded, trying fallback: {primary_err}")
+                response = client.models.generate_content(
+                    model=MODEL_FALLBACK, contents=contents, config=config
+                )
+            else:
+                raise
+
         return response.text
 
     except Exception as e:
+        err_str = str(e).lower()
         logger.error(f"AI analysis error: {e}")
-        return f"Lo siento, tuve un problema procesando tu consulta. Por favor intenta de nuevo. (Error: {str(e)})"
+        if "resource_exhausted" in err_str or "quota" in err_str or "429" in err_str:
+            return (
+                "Estoy recibiendo muchas consultas en este momento y mi cuota está al límite. "
+                "Por favor intenta de nuevo en unos minutos. ⏳\n\n"
+                "⚠️ *Este análisis es educativo y no constituye asesoría financiera oficial.*"
+            )
+        return "Lo siento, tuve un problema procesando tu consulta. Por favor intenta de nuevo."
 
 
 # ─── Ticker Extraction ──────────────────────────────────────────────────────────
