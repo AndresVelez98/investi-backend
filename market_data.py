@@ -7,17 +7,30 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-# Curated list of top assets for the dashboard
+# Curated list of assets for the markets hub
 TOP_ASSETS = [
-    {"ticker": "AAPL",    "name": "Apple",         "category": "Acciones"},
-    {"ticker": "TSLA",    "name": "Tesla",          "category": "Acciones"},
-    {"ticker": "GOOGL",   "name": "Google",         "category": "Acciones"},
-    {"ticker": "MSFT",    "name": "Microsoft",      "category": "Acciones"},
-    {"ticker": "NVDA",    "name": "NVIDIA",         "category": "Acciones"},
-    {"ticker": "AMZN",    "name": "Amazon",         "category": "Acciones"},
-    {"ticker": "BTC-USD", "name": "Bitcoin",        "category": "Cripto"},
-    {"ticker": "ETH-USD", "name": "Ethereum",       "category": "Cripto"},
-    {"ticker": "SPY",     "name": "S&P 500 ETF",    "category": "ETFs"},
+    # Acciones
+    {"ticker": "AAPL",    "name": "Apple",           "category": "Acciones"},
+    {"ticker": "MSFT",    "name": "Microsoft",       "category": "Acciones"},
+    {"ticker": "NVDA",    "name": "NVIDIA",          "category": "Acciones"},
+    {"ticker": "GOOGL",   "name": "Google",          "category": "Acciones"},
+    {"ticker": "AMZN",    "name": "Amazon",          "category": "Acciones"},
+    {"ticker": "TSLA",    "name": "Tesla",           "category": "Acciones"},
+    {"ticker": "META",    "name": "Meta",            "category": "Acciones"},
+    {"ticker": "BC.TO",   "name": "Bancolombia",     "category": "Acciones"},
+    # ETFs
+    {"ticker": "SPY",     "name": "S&P 500 ETF",     "category": "ETFs"},
+    {"ticker": "QQQ",     "name": "Nasdaq 100 ETF",  "category": "ETFs"},
+    {"ticker": "GLD",     "name": "Gold ETF",        "category": "ETFs"},
+    {"ticker": "VTI",     "name": "Total Market ETF","category": "ETFs"},
+    # Cripto
+    {"ticker": "BTC-USD", "name": "Bitcoin",         "category": "Cripto"},
+    {"ticker": "ETH-USD", "name": "Ethereum",        "category": "Cripto"},
+    {"ticker": "SOL-USD", "name": "Solana",          "category": "Cripto"},
+    # Materias Primas
+    {"ticker": "GC=F",    "name": "Oro (Futuros)",   "category": "Materias Primas"},
+    {"ticker": "CL=F",    "name": "Petróleo WTI",    "category": "Materias Primas"},
+    {"ticker": "SI=F",    "name": "Plata (Futuros)", "category": "Materias Primas"},
 ]
 
 # Keyword → Ticker mapping for natural language extraction

@@ -156,9 +156,20 @@ def get_trm():
 
 @app.get("/api/market/top")
 def market_top_assets():
-    """Returns current prices for curated list of top assets (dashboard use)."""
+    """Returns current prices for curated list of top assets (dashboard + markets hub)."""
     assets = get_top_assets()
     return {"assets": assets}
+
+
+@app.get("/api/market/search")
+def market_search(q: str = ""):
+    """Search any ticker or keyword. Returns live price data."""
+    if not q or len(q.strip()) < 1:
+        return {"results": []}
+    data = get_market_data(q.strip())
+    if "error" in data:
+        return {"results": []}
+    return {"results": [data]}
 
 
 @app.get("/api/market/{ticker}/sparkline")
