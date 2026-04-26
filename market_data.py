@@ -131,6 +131,67 @@ def get_top_assets() -> list:
     return results
 
 
+def get_asset_detail(ticker_symbol: str) -> dict:
+    """Returns OHLCV, market cap, prev close and 7-day chart for a single asset."""
+    try:
+        ticker = yf.Ticker(ticker_symbol)
+        hist = ticker.history(period="7d")
+
+        if hist.empty:
+            return {"error": f"No se encontraron datos para '{ticker_symbol}'"}
+        hist = hist.dropna(subset=["Close"])
+        if len(hist) < 1:
+            return {"error": f"Sin datos de cierre para '{ticker_symbol}'"}
+
+        price      = float(hist["Close"].iloc[-1])
+        prev_close = float(hist["Close"].iloc[-2]) if len(hist) >= 2 else price
+        change     = price - prev_close
+        change_pct = (change / prev_close * 100) if prev_close else 0
+
+        last = hist.iloc[-1]
+        day_high = float(last.get("High", price) or price)
+        day_low  = float(last.get("Low",  price) or price)
+        volume   = int(last.get("Volume", 0) or 0)
+
+        # Market cap via fast_info (non-blocking)
+        name = ticker_symbol.upper()
+        market_cap = 0
+        try:
+            fi = ticker.fast_info
+            market_cap = int(getattr(fi, "market_cap", 0) or 0)
+        except Exception:
+            pass
+        try:
+            info = ticker.info
+            name = info.get("longName") or info.get("shortName") or name
+            if not market_cap:
+                market_cap = int(info.get("marketCap", 0) or 0)
+        except Exception:
+            pass
+
+        chart = [
+            {"date": ts.strftime("%d/%m"), "price": round(float(row["Close"]), 4)}
+            for ts, row in hist.iterrows()
+        ]
+
+        return {
+            "ticker":     ticker_symbol.upper(),
+            "name":       name,
+            "price":      round(price, 4),
+            "change":     round(change, 4),
+            "change_pct": round(change_pct, 4),
+            "prev_close": round(prev_close, 4),
+            "day_high":   round(day_high, 4),
+            "day_low":    round(day_low, 4),
+            "volume":     volume,
+            "market_cap": market_cap,
+            "chart":      chart,
+        }
+    except Exception as e:
+        logger.error(f"get_asset_detail error for {ticker_symbol}: {e}")
+        return {"error": str(e)}
+
+
 def get_sparkline_data(ticker_symbol: str) -> dict:
     """Returns last 7 days of close prices for sparkline rendering."""
     try:

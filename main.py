@@ -44,7 +44,7 @@ def _detect_amount(message: str) -> Optional[dict]:
             except ValueError:
                 pass
     return None
-from market_data import get_market_data, get_top_assets, _get_yfinance_data, get_sparkline_data  # type: ignore
+from market_data import get_market_data, get_top_assets, _get_yfinance_data, get_sparkline_data, get_asset_detail  # type: ignore
 from ai_advisor import get_unified_analysis, extract_ticker_from_message, evaluate_risk_profile, get_risk_question  # type: ignore
 from calculator import calculate_projection
 from router_auth import router as auth_router  # type: ignore
@@ -176,6 +176,15 @@ def market_search(q: str = ""):
 def market_sparkline(ticker: str):
     """Returns last 7 days of close prices for sparkline rendering."""
     return get_sparkline_data(ticker.upper())
+
+
+@app.get("/api/market/{ticker}/detail")
+def market_detail(ticker: str):
+    """Returns OHLCV, market cap, prev close and 7-day chart for a single asset."""
+    data = get_asset_detail(ticker.upper())
+    if "error" in data:
+        raise HTTPException(status_code=404, detail=data["error"])
+    return data
 
 
 @app.get("/api/market/{ticker}")
