@@ -28,8 +28,12 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Initializing database...")
-    init_db()
+    try:
+        logger.info("Initializing database...")
+        init_db()
+    except Exception as e:
+        logger.critical(f"Database initialization failed: {e}")
+        raise
 
     from models_education import EducationModule  # type: ignore
     db = next(get_db())
@@ -42,6 +46,8 @@ async def lifespan(app: FastAPI):
             logger.info("Education data seeded successfully!")
         else:
             logger.info(f"Education data already exists ({module_count} modules).")
+    except Exception as e:
+        logger.error(f"Education seed failed (non-fatal): {e}")
     finally:
         db.close()
 

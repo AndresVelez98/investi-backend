@@ -3,9 +3,8 @@ routers/market.py — Market data and TRM endpoints
 """
 import logging
 import yfinance as yf  # type: ignore
-from fastapi import APIRouter, HTTPException, Request, Query
+from fastapi import APIRouter, HTTPException, Request, Query, Path
 
-from fastapi import Query
 from market_data import get_market_data, get_top_assets, _get_yfinance_data, get_sparkline_data, get_asset_detail  # type: ignore
 from core.cache import ttl_cache  # type: ignore
 from core.limiter import limiter  # type: ignore
@@ -13,6 +12,8 @@ from core.constants import TRM_FALLBACK  # type: ignore
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Market"])
+
+_TICKER_PATH = Path(..., min_length=1, max_length=20, pattern=r"^[A-Za-z0-9.\-=^]+$")
 
 
 @router.get("/api/trm")
@@ -60,14 +61,14 @@ def market_search(request: Request, q: str = Query(default="", max_length=20)):
 
 @router.get("/api/market/{ticker}/sparkline")
 @limiter.limit("30/minute")
-def market_sparkline(request: Request, ticker: str):
+def market_sparkline(request: Request, ticker: str = _TICKER_PATH):
     """Returns last 7 days of close prices for sparkline rendering."""
     return get_sparkline_data(ticker.upper())
 
 
 @router.get("/api/market/{ticker}/detail")
 @limiter.limit("30/minute")
-def market_detail(request: Request, ticker: str):
+def market_detail(request: Request, ticker: str = _TICKER_PATH):
     """Returns OHLCV, market cap, prev close and 7-day chart for a single asset."""
     data = get_asset_detail(ticker.upper())
     if "error" in data:
@@ -77,7 +78,7 @@ def market_detail(request: Request, ticker: str):
 
 @router.get("/api/market/{ticker}")
 @limiter.limit("30/minute")
-def market_single_asset(request: Request, ticker: str):
+def market_single_asset(request: Request, ticker: str = _TICKER_PATH):
     """Returns real-time data for a single ticker."""
     data = _get_yfinance_data(ticker.upper())
     if "error" in data:

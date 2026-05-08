@@ -1,7 +1,7 @@
 """
 router_auth.py — Register & Login endpoints for Investi
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import timedelta
@@ -9,8 +9,9 @@ from typing import Optional
 from pydantic import BaseModel, EmailStr, Field
 from database import get_db
 from models import User
-from auth import hash_password, verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user
+from auth import hash_password, verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
 from schemas import RiskProfile  # type: ignore
+from core.limiter import limiter  # type: ignore
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -29,12 +30,13 @@ class TokenResponse(BaseModel):
     token_type: str
     user_id: int
     name: str
-    risk_profile: Optional[str] = None
+    risk_profile: Optional[RiskProfile] = None
 
 # ─── Register ─────────────────────────────────────────────────────────────────
 
 @router.post("/register", response_model=TokenResponse, status_code=201)
-def register(data: RegisterRequest, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def register(request: Request, data: RegisterRequest, db: Session = Depends(get_db)):
     """Creates a new user with hashed password and returns a JWT token."""
     existing = db.query(User).filter(User.email == data.email).first()
     if existing:
@@ -61,7 +63,8 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
 # ─── Login ────────────────────────────────────────────────────────────────────
 
 @router.post("/login", response_model=TokenResponse)
-def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def login(request: Request, form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """Authenticates user and returns a JWT token."""
     user = db.query(User).filter(User.email == form.username).first()
     if not user or not user.password_hash or not verify_password(form.password, user.password_hash):

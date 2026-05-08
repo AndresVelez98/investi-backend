@@ -14,7 +14,7 @@ class User(Base):
     monthly_income = Column(Float, nullable=True)
     password_hash = Column(String(200), nullable=True)
     risk_profile = Column(String(20), nullable=True)   # Conservador | Moderado | Agresivo
-    created_at = Column(DateTime, default=_now)
+    created_at = Column(DateTime(timezone=True), default=_now)
 
     profiles = relationship("Profile", back_populates="owner")
 
@@ -26,6 +26,6 @@ class Profile(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     risk_profile = Column(String(20), nullable=False)  # Conservador | Moderado | Agresivo
     test_answers = Column(Text, nullable=True)         # JSON string of Q&A pairs
-    created_at = Column(DateTime, default=_now)
+    created_at = Column(DateTime(timezone=True), default=_now)
 
     owner = relationship("User", back_populates="profiles")

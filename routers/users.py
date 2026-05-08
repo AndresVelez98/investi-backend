@@ -6,24 +6,16 @@ from sqlalchemy.orm import Session
 
 from database import get_db  # type: ignore
 from models import User, Profile  # type: ignore
-from schemas import ProfileCreate, ProfileResponse  # type: ignore
+from schemas import ProfileCreate, ProfileResponse, UserResponse  # type: ignore
 from auth import get_current_user  # type: ignore
 
 router = APIRouter(tags=["Users"])
 
 
-@router.get("/api/users/me")
+@router.get("/api/users/me", response_model=UserResponse)
 def get_me_user(current_user: User = Depends(get_current_user)):
     """Returns the current authenticated user."""
-    return {
-        "id": current_user.id,
-        "name": current_user.name,
-        "email": current_user.email,
-        "age": current_user.age,
-        "monthly_income": current_user.monthly_income,
-        "risk_profile": current_user.risk_profile,
-        "created_at": current_user.created_at,
-    }
+    return current_user
 
 
 @router.post("/api/profiles", response_model=ProfileResponse, status_code=201)
