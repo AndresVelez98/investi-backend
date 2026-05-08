@@ -1,5 +1,6 @@
 fastapi
 uvicorn[standard]
+slowapi
 requests
 beautifulsoup4
 yfinance

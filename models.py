@@ -1,7 +1,11 @@
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text  # type: ignore
 from sqlalchemy.orm import relationship  # type: ignore
 from database import Base  # type: ignore
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _now():
+    return datetime.now(timezone.utc)
 
 
 class User(Base):
@@ -13,7 +17,8 @@ class User(Base):
     age = Column(Integer, nullable=True)
     monthly_income = Column(Float, nullable=True)
     password_hash = Column(String(200), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    risk_profile = Column(String(20), nullable=True)   # Conservador | Moderado | Agresivo
+    created_at = Column(DateTime, default=_now)
 
     profiles = relationship("Profile", back_populates="owner")
 
@@ -25,6 +30,6 @@ class Profile(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     risk_profile = Column(String(20), nullable=False)  # Conservador | Moderado | Agresivo
     test_answers = Column(Text, nullable=True)         # JSON string of Q&A pairs
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_now)
 
     owner = relationship("User", back_populates="profiles")

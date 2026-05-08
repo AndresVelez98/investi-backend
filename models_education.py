@@ -8,7 +8,11 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from database import Base
-from datetime import datetime
+from datetime import datetime, timezone
+
+
+def _now():
+    return datetime.now(timezone.utc)
 
 
 # ─── Módulos (categorías principales) ─────────────────────────────────────────
@@ -27,7 +31,7 @@ class EducationModule(Base):
     icon = Column(String(10), default="📘")                              # emoji para el frontend
     order = Column(SmallInteger, nullable=False, default=0)              # orden pedagógico
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_now)
 
     lessons = relationship("Lesson", back_populates="module", order_by="Lesson.order")
 
@@ -52,7 +56,7 @@ class Lesson(Base):
     xp_reward = Column(Integer, default=50)                 # puntos de experiencia
     order = Column(SmallInteger, nullable=False, default=0)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_now)
 
     module = relationship("EducationModule", back_populates="lessons")
     quiz_questions = relationship("QuizQuestion", back_populates="lesson", order_by="QuizQuestion.order")
@@ -97,7 +101,7 @@ class UserLessonProgress(Base):
     quiz_attempts = Column(Integer, default=0)
     xp_earned = Column(Integer, default=0)
     completed_at = Column(DateTime, nullable=True)
-    started_at = Column(DateTime, default=datetime.utcnow)
+    started_at = Column(DateTime, default=_now)
 
     user = relationship("User")
     lesson = relationship("Lesson")
@@ -119,7 +123,7 @@ class Achievement(Base):
     xp_bonus = Column(Integer, default=100)
     condition_type = Column(String(50), nullable=False)     # "lessons_completed", "module_completed", "streak", "perfect_quiz"
     condition_value = Column(Integer, nullable=False)        # ej: 5 lecciones, 1 módulo, 3 días seguidos
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=_now)
 
 
 class UserAchievement(Base):
@@ -131,7 +135,7 @@ class UserAchievement(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     achievement_id = Column(Integer, ForeignKey("education_achievements.id"), nullable=False)
-    unlocked_at = Column(DateTime, default=datetime.utcnow)
+    unlocked_at = Column(DateTime, default=_now)
 
     user = relationship("User")
     achievement = relationship("Achievement")

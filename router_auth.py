@@ -5,27 +5,30 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.orm import Session
 from datetime import timedelta
-from pydantic import BaseModel, EmailStr
+from typing import Optional
+from pydantic import BaseModel, EmailStr, Field
 from database import get_db
 from models import User
-from auth import hash_password, verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES
+from auth import hash_password, verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
 # ─── Schemas locales ──────────────────────────────────────────────────────────
 
 class RegisterRequest(BaseModel):
-    name: str
+    name: str = Field(..., min_length=1, max_length=100)
     email: EmailStr
-    password: str
-    age: int | None = None
-    monthly_income: float | None = None
+    password: str = Field(..., min_length=6, max_length=128)
+    age: Optional[int] = Field(None, ge=18, le=100)
+    monthly_income: Optional[float] = Field(None, ge=0)
+    risk_profile: Optional[str] = None
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str
     user_id: int
     name: str
+    risk_profile: Optional[str] = None
 
 # ─── Register ─────────────────────────────────────────────────────────────────
 
@@ -42,6 +45,7 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
         password_hash=hash_password(data.password),
         age=data.age,
         monthly_income=data.monthly_income,
+        risk_profile=data.risk_profile,
     )
     db.add(user)
     db.commit()
@@ -51,7 +55,7 @@ def register(data: RegisterRequest, db: Session = Depends(get_db)):
         data={"sub": str(user.id)},
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
-    return {"access_token": token, "token_type": "bearer", "user_id": user.id, "name": user.name}
+    return {"access_token": token, "token_type": "bearer", "user_id": user.id, "name": user.name, "risk_profile": user.risk_profile}
 
 # ─── Login ────────────────────────────────────────────────────────────────────
 
@@ -66,4 +70,23 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
         data={"sub": str(user.id)},
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
-    return {"access_token": token, "token_type": "bearer", "user_id": user.id, "name": user.name}
+    return {"access_token": token, "token_type": "bearer", "user_id": user.id, "name": user.name, "risk_profile": user.risk_profile}
+
+# ─── Me ───────────────────────────────────────────────────────────────────────
+
+class MeResponse(BaseModel):
+    user_id: int
+    name: str
+    email: Optional[str] = None
+    risk_profile: Optional[str] = None
+
+
+@router.get("/me", response_model=MeResponse)
+def get_me(current_user: User = Depends(get_current_user)):
+    """Returns the authenticated user's profile."""
+    return {
+        "user_id": current_user.id,
+        "name": current_user.name,
+        "email": current_user.email,
+        "risk_profile": current_user.risk_profile,
+    }

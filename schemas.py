@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field  # type: ignore
-from typing import Optional, List
+from typing import Optional, List, Literal
 from datetime import datetime
 
 
@@ -49,9 +49,11 @@ class ChatHistoryMessage(BaseModel):
     content: str
 
 
+RiskProfile = Literal["Conservador", "Moderado", "Agresivo"]
+
 class ChatRequest(BaseModel):
-    message: str
-    profile: str = "Moderado"
+    message: str = Field(..., max_length=2000)
+    profile: RiskProfile = "Moderado"
     history: List[ChatHistoryMessage] = []
 
 
