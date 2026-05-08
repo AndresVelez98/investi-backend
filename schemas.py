@@ -28,7 +28,7 @@ class UserResponse(BaseModel):
 
 class ProfileCreate(BaseModel):
     user_id: int
-    risk_profile: str  # Conservador | Moderado | Agresivo
+    risk_profile: RiskProfile
     test_answers: Optional[str] = None  # JSON string
 
 
@@ -44,12 +44,12 @@ class ProfileResponse(BaseModel):
 
 # ─── Chat Schemas ───────────────────────────────────────────────────────────────
 
-class ChatHistoryMessage(BaseModel):
-    role: str   # "user" | "assistant"
-    content: str
-
-
 RiskProfile = Literal["Conservador", "Moderado", "Agresivo"]
+
+
+class ChatHistoryMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str
 
 class ChatRequest(BaseModel):
     message: str = Field(..., max_length=2000)

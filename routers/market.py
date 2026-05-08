@@ -3,16 +3,16 @@ routers/market.py — Market data and TRM endpoints
 """
 import logging
 import yfinance as yf  # type: ignore
-from fastapi import APIRouter, HTTPException, Request
-from slowapi import Limiter  # type: ignore
-from slowapi.util import get_remote_address  # type: ignore
+from fastapi import APIRouter, HTTPException, Request, Query
 
+from fastapi import Query
 from market_data import get_market_data, get_top_assets, _get_yfinance_data, get_sparkline_data, get_asset_detail  # type: ignore
 from core.cache import ttl_cache  # type: ignore
+from core.limiter import limiter  # type: ignore
+from core.constants import TRM_FALLBACK  # type: ignore
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Market"])
-limiter = Limiter(key_func=get_remote_address)
 
 
 @router.get("/api/trm")
@@ -31,7 +31,7 @@ def _get_trm_cached():
             return {"trm": round(rate, 0), "source": "yfinance"}
     except Exception as e:
         logger.warning(f"TRM fetch failed: {e}")
-    return {"trm": 3588, "source": "fallback"}
+    return {"trm": TRM_FALLBACK, "source": "fallback"}
 
 
 @router.get("/api/market/top")
@@ -48,7 +48,7 @@ def _get_top_assets_cached():
 
 @router.get("/api/market/search")
 @limiter.limit("30/minute")
-def market_search(request: Request, q: str = ""):
+def market_search(request: Request, q: str = Query(default="", max_length=20)):
     """Search any ticker or keyword. Returns live price data."""
     if not q or len(q.strip()) < 1:
         return {"results": []}

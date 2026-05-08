@@ -10,6 +10,7 @@ from pydantic import BaseModel, EmailStr, Field
 from database import get_db
 from models import User
 from auth import hash_password, verify_password, create_access_token, ACCESS_TOKEN_EXPIRE_MINUTES, get_current_user
+from schemas import RiskProfile  # type: ignore
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
 
@@ -21,7 +22,7 @@ class RegisterRequest(BaseModel):
     password: str = Field(..., min_length=6, max_length=128)
     age: Optional[int] = Field(None, ge=18, le=100)
     monthly_income: Optional[float] = Field(None, ge=0)
-    risk_profile: Optional[str] = None
+    risk_profile: Optional[RiskProfile] = None
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -71,22 +72,3 @@ def login(form: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get
         expires_delta=timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     )
     return {"access_token": token, "token_type": "bearer", "user_id": user.id, "name": user.name, "risk_profile": user.risk_profile}
-
-# ─── Me ───────────────────────────────────────────────────────────────────────
-
-class MeResponse(BaseModel):
-    user_id: int
-    name: str
-    email: Optional[str] = None
-    risk_profile: Optional[str] = None
-
-
-@router.get("/me", response_model=MeResponse)
-def get_me(current_user: User = Depends(get_current_user)):
-    """Returns the authenticated user's profile."""
-    return {
-        "user_id": current_user.id,
-        "name": current_user.name,
-        "email": current_user.email,
-        "risk_profile": current_user.risk_profile,
-    }

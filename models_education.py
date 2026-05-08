@@ -8,11 +8,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import relationship
 from database import Base
-from datetime import datetime, timezone
-
-
-def _now():
-    return datetime.now(timezone.utc)
+from core.utils import utcnow as _now  # type: ignore
 
 
 # ─── Módulos (categorías principales) ─────────────────────────────────────────

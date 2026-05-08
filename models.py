@@ -1,11 +1,7 @@
 from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey, Text  # type: ignore
 from sqlalchemy.orm import relationship  # type: ignore
 from database import Base  # type: ignore
-from datetime import datetime, timezone
-
-
-def _now():
-    return datetime.now(timezone.utc)
+from core.utils import utcnow as _now  # type: ignore
 
 
 class User(Base):

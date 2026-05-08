@@ -3,15 +3,16 @@ main.py — FastAPI application entry point for Investi AI Backend
 """
 import logging
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI  # type: ignore
 from fastapi.middleware.cors import CORSMiddleware  # type: ignore
-from slowapi import Limiter, _rate_limit_exceeded_handler  # type: ignore
-from slowapi.util import get_remote_address  # type: ignore
+from slowapi import _rate_limit_exceeded_handler  # type: ignore
 from slowapi.errors import RateLimitExceeded  # type: ignore
 from dotenv import load_dotenv  # type: ignore
 
 from database import get_db, init_db  # type: ignore
+from core.limiter import limiter  # type: ignore
 from router_auth import router as auth_router  # type: ignore
 from router_education import router as education_router  # type: ignore
 from routers.chat import router as chat_router  # type: ignore
@@ -24,44 +25,9 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-limiter = Limiter(key_func=get_remote_address)
 
-app = FastAPI(title="Investi AI Backend", version="4.0.0")
-app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
-
-# ─── Routers ─────────────────────────────────────────────────────────────────
-
-app.include_router(auth_router)
-app.include_router(education_router)
-app.include_router(chat_router)
-app.include_router(market_router)
-app.include_router(calculator_router)
-app.include_router(risk_router)
-app.include_router(users_router)
-
-# ─── CORS ────────────────────────────────────────────────────────────────────
-
-ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "https://investi-frontend-teal.vercel.app",
-]
-frontend_url = os.getenv("FRONTEND_URL")
-if frontend_url:
-    ALLOWED_ORIGINS.append(frontend_url)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# ─── Startup ─────────────────────────────────────────────────────────────────
-
-@app.on_event("startup")
-def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     logger.info("Initializing database...")
     init_db()
 
@@ -80,6 +46,40 @@ def startup_event():
         db.close()
 
     logger.info("Database ready.")
+    yield
+
+
+app = FastAPI(title="Investi AI Backend", version="4.0.0", lifespan=lifespan)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# ─── CORS (register before routers) ──────────────────────────────────────────
+
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "https://investi-frontend-teal.vercel.app",
+]
+frontend_url = os.getenv("FRONTEND_URL")
+if frontend_url:
+    ALLOWED_ORIGINS.append(frontend_url)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# ─── Routers ─────────────────────────────────────────────────────────────────
+
+app.include_router(auth_router)
+app.include_router(education_router)
+app.include_router(chat_router)
+app.include_router(market_router)
+app.include_router(calculator_router)
+app.include_router(risk_router)
+app.include_router(users_router)
 
 
 # ─── Health Check ─────────────────────────────────────────────────────────────

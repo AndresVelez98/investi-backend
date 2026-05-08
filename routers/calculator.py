@@ -2,15 +2,13 @@
 routers/calculator.py — Financial calculator endpoint
 """
 from fastapi import APIRouter, HTTPException, Request
-from slowapi import Limiter  # type: ignore
-from slowapi.util import get_remote_address  # type: ignore
 
 from schemas import CalculatorRequest  # type: ignore
 from calculator import calculate_projection  # type: ignore
 from core.cache import ttl_cache  # type: ignore
+from core.limiter import limiter  # type: ignore
 
 router = APIRouter(tags=["Calculator"])
-limiter = Limiter(key_func=get_remote_address)
 
 
 @router.post("/api/calculate")

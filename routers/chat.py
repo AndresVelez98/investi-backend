@@ -3,27 +3,26 @@ routers/chat.py — Chat endpoint
 """
 import re as _re
 from fastapi import APIRouter, Request
-from slowapi import Limiter  # type: ignore
-from slowapi.util import get_remote_address  # type: ignore
 
 from schemas import ChatRequest
 from market_data import get_market_data  # type: ignore
 from ai_advisor import get_unified_analysis, extract_ticker_from_message  # type: ignore
+from core.limiter import limiter  # type: ignore
+from core.constants import TRM_FALLBACK  # type: ignore
 
 router = APIRouter(tags=["Chat"])
-limiter = Limiter(key_func=get_remote_address)
 
-TRM_FALLBACK = 3588
+# Compile once at module level
+_AMOUNT_PATTERNS = [
+    (_re.compile(r'\$\s*(\d{1,3}(?:[.\s]\d{3})*|\d+)\s*(?:USD|usd|dólares?)', _re.IGNORECASE), "usd"),
+    (_re.compile(r'(\d{1,3}(?:[.\s]\d{3})*|\d+)\s*(?:pesos?|COP|cop)', _re.IGNORECASE), "cop"),
+    (_re.compile(r'\$\s*(\d{1,3}(?:[.\s]\d{3})*|\d+)', _re.IGNORECASE), "ambiguous"),
+]
 
 
 def _detect_amount(message: str) -> dict | None:
     """Detect investment amounts in user messages for the calculator widget."""
-    patterns = [
-        (_re.compile(r'\$\s*(\d{1,3}(?:[.\s]\d{3})*|\d+)\s*(?:USD|usd|dólares?)', _re.IGNORECASE), "usd"),
-        (_re.compile(r'(\d{1,3}(?:[.\s]\d{3})*|\d+)\s*(?:pesos?|COP|cop)', _re.IGNORECASE), "cop"),
-        (_re.compile(r'\$\s*(\d{1,3}(?:[.\s]\d{3})*|\d+)', _re.IGNORECASE), "ambiguous"),
-    ]
-    for pattern, kind in patterns:
+    for pattern, kind in _AMOUNT_PATTERNS:
         m = pattern.search(message)
         if m:
             raw = m.group(1).replace(".", "").replace(" ", "")

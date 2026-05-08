@@ -33,17 +33,15 @@ def create_profile(
     current_user: User = Depends(get_current_user),
 ):
     """Saves the authenticated user's risk profile result."""
-    if profile_data.user_id != current_user.id:
-        raise HTTPException(status_code=403, detail="No puedes crear un perfil para otro usuario")
-
+    # Always use the token's user_id — never trust the body's user_id
     db_profile = Profile(
-        user_id=profile_data.user_id,
+        user_id=current_user.id,
         risk_profile=profile_data.risk_profile,
         test_answers=profile_data.test_answers,
     )
     db.add(db_profile)
 
-    # Also update the denormalized column on User
+    # Denormalize onto User for quick access
     current_user.risk_profile = profile_data.risk_profile
     db.commit()
     db.refresh(db_profile)
