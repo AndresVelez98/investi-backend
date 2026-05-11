@@ -2,11 +2,12 @@
 router_education.py — Endpoints para el sistema de educación financiera gamificada
 Incluye: módulos, lecciones, quizzes, progreso, logros y estadísticas
 """
-from fastapi import APIRouter, HTTPException, Depends
+import logging
+from fastapi import APIRouter, HTTPException, Depends, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from database import get_db
 from models import User
@@ -20,6 +21,9 @@ from schemas_education import (
     UserStatsResponse, AchievementResponse,
 )
 from auth import get_current_user
+from core.limiter import limiter  # type: ignore
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/education", tags=["Education"])
 
@@ -144,15 +148,24 @@ def get_lesson(
         .first()
     )
 
-    # Registrar que el usuario empezó la lección
+    # Registrar que el usuario empezó la lección (guard against race conditions)
     if not progress:
-        progress = UserLessonProgress(
-            user_id=current_user.id,
-            lesson_id=lesson.id,
-        )
-        db.add(progress)
-        db.commit()
-        db.refresh(progress)
+        try:
+            progress = UserLessonProgress(
+                user_id=current_user.id,
+                lesson_id=lesson.id,
+            )
+            db.add(progress)
+            db.commit()
+            db.refresh(progress)
+        except Exception:
+            db.rollback()
+            # Another concurrent request already created the record
+            progress = (
+                db.query(UserLessonProgress)
+                .filter_by(user_id=current_user.id, lesson_id=lesson.id)
+                .first()
+            )
 
     quiz_questions = (
         db.query(QuizQuestion)
@@ -193,7 +206,9 @@ def get_lesson(
 # ═══════════════════════════════════════════════════════════════════════════════
 
 @router.post("/lessons/{lesson_slug}/quiz", response_model=QuizResultResponse)
+@limiter.limit("20/minute")
 def submit_quiz(
+    request: Request,
     lesson_slug: str,
     submission: QuizSubmitRequest,
     db: Session = Depends(get_db),
@@ -260,25 +275,44 @@ def submit_quiz(
         .first()
     )
     if not progress:
-        progress = UserLessonProgress(
-            user_id=current_user.id,
-            lesson_id=lesson.id,
-        )
-        db.add(progress)
+        try:
+            progress = UserLessonProgress(
+                user_id=current_user.id,
+                lesson_id=lesson.id,
+            )
+            db.add(progress)
+            db.flush()
+        except Exception:
+            db.rollback()
+            progress = (
+                db.query(UserLessonProgress)
+                .filter_by(user_id=current_user.id, lesson_id=lesson.id)
+                .first()
+            )
+            if not progress:
+                raise HTTPException(status_code=500, detail="Error al registrar progreso")
 
     progress.quiz_attempts += 1
 
     # Solo actualizar si es mejor score o primera vez que pasa
-    if passed and (not progress.is_completed or score > (progress.quiz_score or 0)):
+    already_completed = progress.is_completed
+    if passed and (not already_completed or score > (progress.quiz_score or 0)):
         progress.is_completed = True
         progress.quiz_score = score
         progress.xp_earned = xp_earned
-        progress.completed_at = datetime.utcnow()
+        progress.completed_at = datetime.now(timezone.utc)
+    else:
+        # No new XP granted: already completed with equal or better score, or failed
+        xp_earned = 0
 
     db.commit()
 
-    # Verificar logros nuevos
-    new_achievements = _check_achievements(db, current_user.id, score)
+    # Verificar logros nuevos (non-fatal: quiz result is already saved)
+    try:
+        new_achievements = _check_achievements(db, current_user.id, score)
+    except Exception as e:
+        logger.error(f"Achievement check failed for user {current_user.id}: {e}")
+        new_achievements = []
 
     return QuizResultResponse(
         lesson_id=lesson.id,
@@ -519,20 +553,19 @@ def _calculate_streak(db: Session, user_id: int) -> int:
     if not dates:
         return 0
 
-    today = datetime.utcnow().date()
+    today = datetime.now(timezone.utc).date()
     streak = 0
 
     # La racha debe incluir hoy o ayer para ser "actual"
     if dates[0] != today and dates[0] != today - timedelta(days=1):
         return 0
 
+    # Determine the base date: today if the most recent completion was today,
+    # otherwise yesterday.
+    base = dates[0]  # either today or today-1
+
     for i, d in enumerate(dates):
-        expected = today - timedelta(days=i)
-        # Permitir que empiece desde ayer
-        if i == 0 and d == today - timedelta(days=1):
-            expected = today - timedelta(days=1)
-            streak += 1
-            continue
+        expected = base - timedelta(days=i)
         if d == expected:
             streak += 1
         else:

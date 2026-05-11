@@ -90,8 +90,8 @@ class CalculatorResponse(BaseModel):
 # ─── Risk Test Schemas ──────────────────────────────────────────────────────────
 
 class RiskTestEvaluateRequest(BaseModel):
-    answers: List[str]  # 5 answers to the risk questions
-    user_name: Optional[str] = None
+    answers: List[str] = Field(..., min_length=5, max_length=5)  # exactly 5 answers
+    user_name: Optional[str] = Field(None, max_length=100)
 
 
 class RiskTestEvaluateResponse(BaseModel):

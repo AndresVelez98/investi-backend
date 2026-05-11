@@ -77,9 +77,12 @@ def calculate_projection(ticker: str, amount: float, months: int) -> dict:
         total_gain = final_value - amount
         total_gain_pct = (total_gain / amount) * 100
 
-        # Annualized return
+        # Annualized return (guard against zero/negative final_value)
         years = months / 12
-        annualized_return = ((final_value / amount) ** (1 / years) - 1) * 100 if years > 0 else 0
+        if years > 0 and amount > 0 and final_value > 0:
+            annualized_return = ((final_value / amount) ** (1 / years) - 1) * 100
+        else:
+            annualized_return = 0
 
         asset_name = ASSET_NAMES.get(ticker, ticker)
 

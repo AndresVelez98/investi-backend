@@ -16,7 +16,11 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 MODEL_NAME = "gemini-2.5-flash-lite"
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+_GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+if not _GEMINI_API_KEY:
+    raise RuntimeError("GEMINI_API_KEY environment variable is required")
+
+client = genai.Client(api_key=_GEMINI_API_KEY)
 
 # ─── Risk Test Questions ────────────────────────────────────────────────────────
 

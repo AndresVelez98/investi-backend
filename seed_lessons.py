@@ -822,6 +822,7 @@ def seed_education_data(db: Session):
             # Seed Lessons for this module
             lessons_data = LESSONS.get(mod_data["slug"], [])
             for lesson_data in lessons_data:
+                lesson_data = lesson_data.copy()
                 quiz_data = lesson_data.pop("quiz", [])
                 lesson = Lesson(module_id=module.id, **lesson_data)
                 db.add(lesson)

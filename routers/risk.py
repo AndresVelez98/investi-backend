@@ -21,9 +21,9 @@ def get_question(number: int):
 @router.post("/api/risk-test/evaluate")
 def evaluate_risk_test(request: RiskTestEvaluateRequest):
     """Evaluates 5 answers and returns the user's risk profile."""
-    if len(request.answers) < 5:
+    if len(request.answers) != 5:
         raise HTTPException(
             status_code=400,
-            detail=f"Se necesitan 5 respuestas, se recibieron {len(request.answers)}"
+            detail=f"Se necesitan exactamente 5 respuestas, se recibieron {len(request.answers)}"
         )
-    return evaluate_risk_profile(request.answers, request.user_name)
+    return evaluate_risk_profile(request.answers[:5], request.user_name)

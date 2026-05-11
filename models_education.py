@@ -4,7 +4,7 @@ Módulos → Lecciones → Quizzes → Progreso del usuario → Logros (badges)
 """
 from sqlalchemy import (
     Column, Integer, String, Float, Boolean, DateTime,
-    ForeignKey, Text, SmallInteger
+    ForeignKey, Text, SmallInteger, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
 from database import Base
@@ -88,6 +88,9 @@ class UserLessonProgress(Base):
     Registra el progreso de cada usuario en cada lección.
     """
     __tablename__ = "education_user_progress"
+    __table_args__ = (
+        UniqueConstraint("user_id", "lesson_id", name="uq_user_lesson_progress"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
@@ -127,6 +130,9 @@ class UserAchievement(Base):
     Logros desbloqueados por cada usuario.
     """
     __tablename__ = "education_user_achievements"
+    __table_args__ = (
+        UniqueConstraint("user_id", "achievement_id", name="uq_user_achievement"),
+    )
 
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
