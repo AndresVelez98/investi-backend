@@ -1,20 +1,40 @@
 from sqlalchemy import create_engine
+from sqlalchemy.engine import URL
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+from urllib.parse import unquote
 import os
 
-# Use PostgreSQL in production (Render), SQLite locally
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    f"sqlite:///{os.path.join(BASE_DIR, 'investi.db')}"
-)
+_raw = os.getenv("DATABASE_URL", f"sqlite:///{os.path.join(BASE_DIR, 'investi.db')}")
 
-# Render provides postgres:// URLs but SQLAlchemy 1.4+ requires postgresql://
-if DATABASE_URL.startswith("postgres://"):
-    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+if _raw.startswith("postgres://"):
+    _raw = _raw.replace("postgres://", "postgresql://", 1)
 
-connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+if _raw.startswith("postgresql://"):
+    # urlparse breaks on passwords that contain [ or ] (treats them as IPv6).
+    # Parse manually: split on the last @ to separate credentials from host info.
+    body = _raw[len("postgresql://"):]
+    at = body.rfind("@")
+    credentials, hostinfo = body[:at], body[at + 1:]
+    colon = credentials.index(":")
+    _user = credentials[:colon]
+    _password = unquote(credentials[colon + 1:])  # decode %2B → + etc.
+    # hostinfo is "host:port/dbname"
+    host_port, _dbname = hostinfo.rsplit("/", 1)
+    _host, _port = host_port.rsplit(":", 1)
+    DATABASE_URL = URL.create(
+        drivername="postgresql+psycopg2",
+        username=_user,
+        password=_password,
+        host=_host,
+        port=int(_port),
+        database=_dbname,
+    )
+    connect_args = {}
+else:
+    DATABASE_URL = _raw
+    connect_args = {"check_same_thread": False}
 
 engine = create_engine(DATABASE_URL, connect_args=connect_args)
 
